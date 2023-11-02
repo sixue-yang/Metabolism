@@ -1,0 +1,730 @@
+# _author_ = 'sixueyang'
+# _date_ = 2023/10/18 17:36
+import os
+import sys
+import pandas as pd
+import subprocess as sp
+import yaml
+
+# 输入文件参数
+rawdata = config['input']
+group_list = config['group_list']
+spe = config['species']
+missing_value_filling_model = config['missing_value_filling_model']
+DB_dir = config['DB_dir']
+db_path = DB_dir + os.sep + spe + '.xls'
+compare_list = config['compare_list']
+adjust_model = config['adjust_model']
+n_cluster = config['n_cluster'] 
+
+# 软件环境
+scrip_dir = config['script_dir']
+config_file_path = os.path.join(scrip_dir, 'env.yaml')
+config_file = open(config_file_path, 'r')
+env_contig = yaml.safe_load(config_file)
+python = env_contig['python']
+Rscript = env_contig['Rscript']
+
+
+# rawdata = '/work1/Users/yangsixue/pipline/metabolism/Test/AQ-LDD20230222-QTRAP-XGR-data.xlsx'
+# group_list = '/work1/Users/yangsixue/pipline/metabolism/Test/group.list'
+# spe = 'pmum'
+# missing_value_filling_model = 'KNN'
+# DB_dir = '/work1/Users/yangsixue/pipline/metabolism/DB'
+# db_path = DB_dir + os.sep + spe + '.xls'
+# compare_list = ''
+# adjust_model = 'none'
+# n_cluster = 9
+
+# python = '/work1/Users/yangsixue/tools/conda/envs/ML/bin/python'
+# Rscript = '/work1/Users/yangsixue/tools/conda/envs/R/bin/Rscript'
+
+### sort data ###
+Check_db = scrip_dir + os.sep + '00.Check_kegg_db.py'
+Check_compare = scrip_dir + os.sep + '00.Check_compare.py'
+Data_prepare = scrip_dir + os.sep + '01.Data_prepare.py'
+Get_data = scrip_dir + os.sep + '02.Get_data.py'
+Diff_analysis = scrip_dir + os.sep + 'diff_analysis.r'
+Diff_select = scrip_dir + os.sep + '03.Diff_select.py'
+Get_diff_id = scrip_dir + os.sep + '04.Get_diff_id.py'
+Zscore_sort = scrip_dir + os.sep + '05.MK_ZscoreData.py'
+KEGG_id = scrip_dir + os.sep + '06.Get_keggid.py'
+KEGG_pathway = scrip_dir + os.sep + '07.Kegg_pathway.py'
+Venn_data_sort = scrip_dir + os.sep + '08.Venn_data_sort.py'
+kmeans_analysis = scrip_dir + os.sep + '09.Kmean_analysis.py'
+
+### plot ###
+Pcas_plot = scrip_dir + os.sep + 'pp_plot.r'
+Heatmap_plot = scrip_dir + os.sep + 'heatmap_plot.r'
+Volcano_plot = scrip_dir + os.sep + 'volcano_plot.r'
+Vip_point = scrip_dir + os.sep + 'vip_point.r'
+Log2fc_hbar = scrip_dir + os.sep + 'log2fc_hbar.r'
+Violin_plot = scrip_dir + os.sep + 'violin_plot.R'
+Zscore_plot = scrip_dir + os.sep + 'point_plot.R'
+KEGG_analysis = scrip_dir + os.sep + 'kegg_enrich.R'
+Venn_plot = scrip_dir + os.sep + 'venn_upset.R'
+
+
+def checkDir(path):
+    if not os.path.exists(path):
+        os.makedirs(path)
+
+# check compare list
+def check_compare_list(compare_list,group_list):
+    out_com = os.getcwd() + os.sep + '01.Data_prepare/compare.list'
+    #print(out_com)
+    checkDir(os.path.dirname(out_com))
+    if not compare_list:
+        cmd = f'{python} {Check_compare} -g {group_list} -o {out_com}'
+    else:
+        cmd = f'ln -f {compare_list} {out_com}'
+    sp.call(cmd,shell=True)
+    com_list = []
+    with open(out_com) as com_obj:
+        for line in com_obj:
+            one,two = line.strip().split('\t')
+            com_list.append('_'.join([one,two])) 
+    return com_list
+
+#print(check_compare_list(compare_list,group_list),flush=True)
+compare_dirs = check_compare_list(compare_list,group_list)
+
+
+rule all:
+    input:
+        db_path,
+        '01.Data_prepare/All.pca2d.pdf',
+        '01.Data_prepare/All.pca3d.pdf',
+        '01.Data_prepare/All.plsda.pdf',
+        expand('02.Diff_analysis/{g}/{g}_DEP_exp.xls',g=compare_dirs),
+        expand('02.Diff_analysis/{g}/{g}_diff_value.xls',g=compare_dirs),
+        expand('02.Diff_analysis/{g}/{g}_heatmap.pdf',g=compare_dirs),
+        expand('02.Diff_analysis/{g}/{g}_cor_heatmap.pdf',g=compare_dirs),
+        expand('02.Diff_analysis/{g}/{g}_volcano.pdf',g=compare_dirs),
+        expand('02.Diff_analysis/{g}/{g}_vip_point.pdf',g=compare_dirs),
+        expand('02.Diff_analysis/{g}/{g}_log2fc_hbar.pdf',g=compare_dirs),
+        expand('02.Diff_analysis/{g}/{g}_violin.pdf',g=compare_dirs),
+        expand('02.Diff_analysis/{g}/{g}_zscore.pdf',g=compare_dirs),
+        expand('02.Diff_analysis/{g}/{g}_violin_plot.xls',g=compare_dirs),
+        expand('02.Diff_analysis/{g}/{g}.pca2d.pdf',g=compare_dirs),
+        expand('02.Diff_analysis/{g}/{g}.pca3d.pdf',g=compare_dirs),
+        expand('02.Diff_analysis/{g}/{g}.plsda.pdf',g=compare_dirs),
+        expand('03.KEGG_Enrichment/{g}/{g}_diff.id',g=compare_dirs),
+        expand('03.KEGG_Enrichment/{g}/{g}_KEGG_enrichment_result.xls',g=compare_dirs),
+        expand('04.KEGG_Pathway/{g}',g=compare_dirs),
+        expand('05.Venn/upset.pdf',g=compare_dirs),
+        expand('05.Venn/diff_meta_result.xls',g=compare_dirs),
+        '06.Result/01.Statistical_Analysis/Total/Total.pca2d.pdf',
+        '06.Result/01.Statistical_Analysis/Total/Total.pca3d.pdf',
+        '06.Result/01.Statistical_Analysis/Total/Total.plsda.pdf',
+        '06.Result/10.Venn/upset.pdf',
+        '06.Result/10.Venn/diff_meta_result.xls',
+        expand('06.Result/01.Statistical_Analysis/{g}/{g}_diff_value.xls',g=compare_dirs),
+        expand('06.Result/02.Hierarchical_Clustering_Analysis/{g}/{g}_heatmap.pdf',g=compare_dirs),
+        expand('06.Result/02.Hierarchical_Clustering_Analysis/{g}/{g}_cor_heatmap.pdf',g=compare_dirs),
+        expand('06.Result/03.Volcano/{g}/{g}_volcano.pdf',g=compare_dirs),
+        expand('06.Result/04.VIP_point/{g}/{g}_vip_point.pdf',g=compare_dirs),
+        expand('06.Result/05.Bar/{g}/{g}_log2fc_hbar.pdf',g=compare_dirs),
+        expand('06.Result/06.Violin/{g}/{g}_violin.pdf',g=compare_dirs),
+        expand('06.Result/07.Z-score/{g}/{g}_zscore.pdf',g=compare_dirs),
+        expand('06.Result/01.Statistical_Analysis/{g}/{g}.pca2d.pdf',g=compare_dirs),
+        expand('06.Result/01.Statistical_Analysis/{g}/{g}.pca3d.pdf',g=compare_dirs),
+        expand('06.Result/01.Statistical_Analysis/{g}/{g}.plsda.pdf',g=compare_dirs),
+        expand('06.Result/08.KEGG_Enrichment/{g}/{g}_diff.id',g=compare_dirs),
+        expand('06.Result/08.KEGG_Enrichment/{g}/{g}_KEGG_enrichment_result.xls',g=compare_dirs),
+        expand('06.Result/08.KEGG_Enrichment/{g}/{g}_cnetplot.pdf',g=compare_dirs),
+        expand('06.Result/08.KEGG_Enrichment/{g}/{g}_barplot.pdf',g=compare_dirs),
+        expand('06.Result/08.KEGG_Enrichment/{g}/{g}_dotplot.pdf',g=compare_dirs),
+        expand('06.Result/09.KEGG_Pathway/{g}',g=compare_dirs),
+        '06.Result/11.KMeans/KMeans_Analysis_data_matrix.xls',
+        '06.Result/11.KMeans/KMeans_Plot.pdf',
+        '06.Result/Map.xls',
+        
+
+
+
+
+# 数据预处理
+rule data_prepare:
+    input:
+        rawdata = rawdata,
+        group_list = group_list
+    output:
+        matrix_out = '01.Data_prepare/All.normalization.xls',
+        change_log = '01.Data_prepare/change_id.log'
+    params:
+        missing_value_filling_model = missing_value_filling_model
+    run:
+        shell_file = '00.Bin/01.data_prepare/00.data_prepare.sh'
+        os.makedirs(os.path.dirname(shell_file),exist_ok=True)
+        rawdata = os.path.abspath(input.rawdata)
+        matrix_out = os.path.abspath(output.matrix_out)
+        group_list = os.path.abspath(input.group_list)
+        change_log = os.path.abspath(output.change_log)
+        shell('echo "{python} {Data_prepare} -i {rawdata} -o {matrix_out} -g {group_list} -m {params.missing_value_filling_model} -l {change_log}" >> {shell_file}')
+
+        cmd = '{python} {Data_prepare} -i {input.rawdata} -o {output.matrix_out} -g {input.group_list} -m {params.missing_value_filling_model} -l {output.change_log}'
+        shell(cmd)
+
+
+rule total_pcas:
+    input:
+        '01.Data_prepare/All.normalization.xls'
+    output:
+        pca2d = '01.Data_prepare/All.pca2d.pdf',
+        pca3d = '01.Data_prepare/All.pca3d.pdf',
+        plsda = '01.Data_prepare/All.plsda.pdf'
+    run:
+        shell_file = '00.Bin/02.total_analysis/01.total_pcas.sh'
+        os.makedirs(os.path.dirname(shell_file),exist_ok=True)
+        input_file = os.path.abspath(input[0])
+        pca2d = os.path.abspath(output.pca2d)
+        pca3d = os.path.abspath(output.pca3d)
+        plsda = os.path.abspath(output.plsda)
+        shell('echo "{Rscript} {Pcas_plot} --metabolintbale {input_file} --outpca2d {pca2d} --outpca3d {pca3d} --outplsda {plsda}" >> {shell_file}')
+        cmd = '{Rscript} {Pcas_plot} --metabolintbale {input[0]} --outpca2d {output.pca2d} --outpca3d {output.pca3d} --outplsda {output.plsda}'
+        shell(cmd)
+
+
+rule kmeans_analysis:
+    input:
+        '01.Data_prepare/All.normalization.xls'
+    output:
+        kmean_data = '01.Data_prepare/KMeans_Analysis_data_matrix.xls',
+        kmean_plot = '01.Data_prepare/KMeans_Plot.pdf'
+    params:
+        n_cluster = n_cluster
+    run:
+        shell_file = '00.Bin/03.kmeans_analysis/01.kmeans_analysis.sh'
+        os.makedirs(os.path.dirname(shell_file),exist_ok=True)
+        input_file = os.path.abspath(input[0])
+        kmean_data = os.path.abspath(output.kmean_data)
+        kmean_plot = os.path.abspath(output.kmean_plot)
+        shell('echo "{python} {kmeans_analysis} -i {input_file} -n {params.n_cluster} -op {kmean_plot} -od {kmean_data}" >> {shell_file}')
+        kmean_cmd = '{python} {kmeans_analysis} -i {input[0]} -n {params.n_cluster} -op {output.kmean_plot} -od {output.kmean_data}'
+        shell(kmean_cmd)
+
+
+# kegg数据库检查
+rule db_check:
+    output:
+        db_path
+    params:
+        species = spe,
+        db_dir = DB_dir
+    run:
+        shell_file = '00.Bin/00.DB_prepare/00.db_check.sh'
+        os.makedirs(os.path.dirname(shell_file),exist_ok=True)
+        shell('echo "{python} {Check_db} -k {params.species} -o {params.db_dir}" >> {shell_file}')
+        check_cmd = '{python} {Check_db} -k {params.species} -o {params.db_dir}'
+        shell(check_cmd)
+
+
+
+
+# 组间比较数据提取
+rule get_compare_data:
+    input:
+        matrix_data = '01.Data_prepare/All.normalization.xls'
+    output:
+        compare_data = '02.Diff_analysis/{g}/{g}.normalization.xls',
+    run:
+        shell_file = '00.Bin/04.compare_analysis/01.get_compare_data.sh'
+        os.makedirs(os.path.dirname(shell_file),exist_ok=True)
+        treat = wildcards.g.split('_')[1]
+        control = wildcards.g.split('_')[0]
+        matrix_data = os.path.abspath(input.matrix_data)
+        compare_data = os.path.abspath(output.compare_data)
+        shell('echo "{python} {Get_data} -i {matrix_data} -t {treat} -c {control} -o {compare_data}" >> {shell_file}')
+        cmd = f'{python} {Get_data} -i {input.matrix_data} -t {treat} -c {control} -o {output.compare_data}'
+        shell(cmd)
+
+rule compare_pcas:
+    input:
+        cor_data = '02.Diff_analysis/{g}/{g}.normalization.xls'
+    output:
+        pca2d = '02.Diff_analysis/{g}/{g}.pca2d.pdf',
+        pca3d = '02.Diff_analysis/{g}/{g}.pca3d.pdf',
+        plsda = '02.Diff_analysis/{g}/{g}.plsda.pdf'
+    run:
+        shell_file = '00.Bin/04.compare_analysis/02.compare_pcas.sh'
+        os.makedirs(os.path.dirname(shell_file),exist_ok=True)
+        input_file = os.path.abspath(input.cor_data)
+        pca2d = os.path.abspath(output.pca2d)
+        pca3d = os.path.abspath(output.pca3d)
+        plsda = os.path.abspath(output.plsda)
+        shell('echo "{Rscript} {Pcas_plot} --metabolintbale {input_file} --outpca2d {pca2d} --outpca3d {pca3d} --outplsda {plsda}" >> {shell_file}')
+        cmd = '{Rscript} {Pcas_plot} --metabolintbale {input.cor_data} --outpca2d {output.pca2d} --outpca3d {output.pca3d} --outplsda {output.plsda}'
+        shell(cmd)
+
+
+# 差异分析
+# /work1/Users/yangsixue/tools/conda/envs/R/bin/Rscript /work1/Users/yangsixue/pipline/metabolism/Script/diff_analysis.r 
+# --adjust none --metabolintable A_vs_C_matrix.xls --treatname A --controlname C  --output test
+rule diff_count:
+    input:
+        compare_data = '02.Diff_analysis/{g}/{g}.normalization.xls'
+    output:
+        count_file = '02.Diff_analysis/{g}/{g}_Diff_count.xls'
+    params:
+        adjust_model = adjust_model
+    run:
+        shell_file = '00.Bin/04.compare_analysis/03.diff_count.sh'
+        os.makedirs(os.path.dirname(shell_file),exist_ok=True)
+        treat = wildcards.g.split('_')[1]
+        control = wildcards.g.split('_')[0]
+        out_prefix = '02.Diff_analysis/{g}/{g}'.format(g=wildcards.g)
+
+        input_file = os.path.abspath(input.compare_data)
+        abs_out_prefix = os.path.abspath(out_prefix)
+        shell('echo "{Rscript} {Diff_analysis} --adjust {params.adjust_model} --metabolintable {input_file} --treatname {treat} --controlname {control}  --output {abs_out_prefix}" >> {shell_file}')
+        cmd = f'{Rscript} {Diff_analysis} --adjust {params.adjust_model} --metabolintable {input.compare_data} --treatname {treat} --controlname {control}  --output {out_prefix}'
+        shell(cmd)
+
+
+
+# 差异数据提取 代谢物类型注释
+# python /work1/Users/yangsixue/pipline/metabolism/Script/03.Diff_select.py 
+#-i A_vs_C_matrix.xls -d testvipselect.xls -o1 DEP_exp.xls -o2 Diff_value.xls
+rule diff_select:
+    input:
+        compare_data = '02.Diff_analysis/{g}/{g}.normalization.xls',
+        count_file = '02.Diff_analysis/{g}/{g}_Diff_count.xls'
+    output:
+        dep_exp = '02.Diff_analysis/{g}/{g}_DEP_exp.xls',
+        diff_value = '02.Diff_analysis/{g}/{g}_diff_value.xls'
+    run:
+        shell_file = '00.Bin/04.compare_analysis/04.diff_select.sh'
+        os.makedirs(os.path.dirname(shell_file),exist_ok=True)
+        input_file = os.path.abspath(input.compare_data)
+        count_file = os.path.abspath(input.count_file)
+        dep_exp = os.path.abspath(output.dep_exp)
+        diff_value = os.path.abspath(output.diff_value)
+        shell('echo "{python} {Diff_select} -i {input_file} -d {count_file} -o1 {dep_exp} -o2 {diff_value}" >> {shell_file}')
+        cmd = '{python} {Diff_select} -i {input.compare_data} -d {input.count_file} -o1 {output.dep_exp} -o2 {output.diff_value}'
+        shell(cmd)
+
+
+
+
+# 差异代谢物 热图绘制
+# /work1/Users/yangsixue/tools/conda/envs/R/bin/Rscript /work1/Users/yangsixue/pipline/metabolism/Script/heatmap_plot.r 
+# --metabolintbale DEP_exp.xls -c 5 --output heatmap.pdf
+rule diff_heatmap_plot:
+    input:
+        dep_exp = '02.Diff_analysis/{g}/{g}_DEP_exp.xls'
+    output:
+        heatmap_pdf = '02.Diff_analysis/{g}/{g}_heatmap.pdf',
+        cor_heatmap_pdf = '02.Diff_analysis/{g}/{g}_cor_heatmap.pdf'
+    run:
+        shell_file = '00.Bin/04.compare_analysis/05.diff_heatmap_plot.sh'
+        os.makedirs(os.path.dirname(shell_file),exist_ok=True)
+        input_file = os.path.abspath(input.dep_exp)
+        heatmap_pdf = os.path.abspath(output.heatmap_pdf)
+        cor_heatmap_pdf = os.path.abspath(output.cor_heatmap_pdf)
+        shell('echo "{Rscript} {Heatmap_plot} --metabolintbale {input_file} -c 5 --output_h {heatmap_pdf} --output_c {cor_heatmap_pdf}" >> {shell_file}')
+        cmd = '{Rscript} {Heatmap_plot} --metabolintbale {input.dep_exp} -c 5 --output_h {output.heatmap_pdf} --output_c {output.cor_heatmap_pdf}'
+        try:
+            shell(cmd)
+        except:
+            cmd_ = 'touch {output.heatmap_pdf};touch {output.cor_heatmap_pdf}'
+            shell(cmd_)
+
+
+# 差异代谢物 火山图绘制
+# /work1/Users/yangsixue/tools/conda/envs/R/bin/Rscript /work1/Users/yangsixue/pipline/metabolism/Script/volcano_plot.r 
+# --allmetabolintbale Diff_value.xls --output volcano.pdf --titlename A_vs_C --width 5 --height 5
+rule diff_volcano_plot:
+    input:
+        diff_value = '02.Diff_analysis/{g}/{g}_diff_value.xls'
+    output:
+        volcano_pdf = '02.Diff_analysis/{g}/{g}_volcano.pdf'
+    run:
+        shell_file = '00.Bin/04.compare_analysis/06.diff_volcano_plot.sh'
+        os.makedirs(os.path.dirname(shell_file),exist_ok=True)
+        titlename = '{t}_vs_{c}'.format(t=wildcards.g.split('_')[1],c=wildcards.g.split('_')[0])
+        input_file = os.path.abspath(input.diff_value)
+        volcano_pdf = os.path.abspath(output.volcano_pdf)
+        shell('echo "{Rscript} {Volcano_plot} --allmetabolintbale {input_file} --titlename {titlename} --width 5 --height 5 --output {volcano_pdf}" >> {shell_file}')
+        cmd = '{Rscript} {Volcano_plot} --allmetabolintbale {input.diff_value} --titlename {titlename} --width 5 --height 5 --output {output.volcano_pdf}'
+        try:
+            shell(cmd)
+        except:
+            cmd_ = 'touch {output.volcano_pdf}'
+            shell(cmd_)
+
+# 差异代谢物 vip 点图
+# /work1/Users/yangsixue/tools/conda/envs/R/bin/Rscript /work1/Users/yangsixue/pipline/metabolism/Script/vip_point.r 
+# --allmetabolintbale Diff_value.xls --output vip_point.pdf --titlename A_vs_C
+rule diff_vip_point_plot:
+    input:
+        diff_value = '02.Diff_analysis/{g}/{g}_diff_value.xls'
+    output:
+        vip_point_pdf =  '02.Diff_analysis/{g}/{g}_vip_point.pdf'
+    run:
+        shell_file = '00.Bin/04.compare_analysis/07.diff_vip_point_plot.sh'
+        os.makedirs(os.path.dirname(shell_file),exist_ok=True)
+        titlename = '{t}_vs_{c}'.format(t=wildcards.g.split('_')[1],c=wildcards.g.split('_')[0])
+        input_file = os.path.abspath(input.diff_value)
+        vip_point_pdf = os.path.abspath(output.vip_point_pdf)
+        shell('echo "{Rscript} {Vip_point} --allmetabolintbale {input_file} --titlename {titlename} --output {vip_point_pdf}" >> {shell_file}')
+        cmd = '{Rscript} {Vip_point} --allmetabolintbale {input.diff_value} --titlename {titlename} --output {output.vip_point_pdf}'
+        try:
+            shell(cmd)
+        except:
+            cmd_ = 'touch {output.vip_point_pdf}'
+            shell(cmd_)
+
+
+# 差异代谢物 log2fc 水平柱状图绘制
+# /work1/Users/yangsixue/tools/conda/envs/R/bin/Rscript /work1/Users/yangsixue/pipline/metabolism/Script/log2fc_hbar.r 
+# --allmetabolintbale Diff_value.xls --output log2fc.pdf --titlename A_vs_C
+rule diff_log2fc_hbar_plot:
+    input:
+        diff_value = '02.Diff_analysis/{g}/{g}_diff_value.xls'
+    output:
+        log2fc_hbar_pdf = '02.Diff_analysis/{g}/{g}_log2fc_hbar.pdf'
+    run:
+        shell_file = '00.Bin/04.compare_analysis/08.diff_log2fc_hbar_plot.sh'
+        os.makedirs(os.path.dirname(shell_file),exist_ok=True)
+        titlename = '{t}_vs_{c}'.format(t=wildcards.g.split('_')[1],c=wildcards.g.split('_')[0])
+        input_file = os.path.abspath(input.diff_value)
+        log2fc_hbar_pdf = os.path.abspath(output.log2fc_hbar_pdf)
+        shell('echo "{Rscript} {Log2fc_hbar} --allmetabolintbale {input_file} --titlename {titlename} --output {log2fc_hbar_pdf}" >> {shell_file}')
+        cmd = '{Rscript} {Log2fc_hbar} --allmetabolintbale {input.diff_value} --titlename {titlename} --output {output.log2fc_hbar_pdf}'
+        try:
+            shell(cmd)
+        except:
+            cmd_ = 'touch {output.log2fc_hbar_pdf}'
+            shell(cmd_)
+
+
+# 差异代谢物 小提琴图绘制
+# python /work1/Users/yangsixue/pipline/metabolism/Script/04.Get_diff_id.py -i DEP_exp.xls -o test.vio.xls
+# Rscript /work1/Users/yangsixue/pipline/metabolism/Script/violin_plot.R  --violin test.vio.xls --output violin.pdf
+rule diff_violin_plot:
+    input:
+        dep_exp = '02.Diff_analysis/{g}/{g}_DEP_exp.xls'
+    output:
+        violin_plot_data = '02.Diff_analysis/{g}/{g}_violin_plot.xls',
+        violin_pdf = '02.Diff_analysis/{g}/{g}_violin.pdf'
+    run:
+        shell_file = '00.Bin/04.compare_analysis/09.diff_violin_plot.sh'
+        os.makedirs(os.path.dirname(shell_file),exist_ok=True)
+        input_file = os.path.abspath(input.dep_exp)
+        violin_plot_data = os.path.abspath(output.violin_plot_data)
+        violin_pdf = os.path.abspath(output.violin_pdf)
+        shell('echo "{python} {Get_diff_id} -i {input_file} -o {violin_plot_data}" >> {shell_file}')
+        shell('echo "{Rscript} {Violin_plot} --violin {violin_plot_data} --output {violin_pdf}" >> {shell_file}')
+        cmd1 = '{python} {Get_diff_id} -i {input.dep_exp} -o {output.violin_plot_data}'
+        cmd2 = '{Rscript} {Violin_plot} --violin {output.violin_plot_data} --output {output.violin_pdf}'
+        try:
+            shell(cmd1)
+            shell(cmd2)
+        except:
+            cmd_ = 'touch {output.violin_pdf};touch {output.violin_plot_data}'
+            shell(cmd_)
+        
+# 差异代谢物 Z-score 散点图绘制
+rule diff_zscore_plot:
+    input:
+        violin_plot_data = '02.Diff_analysis/{g}/{g}_violin_plot.xls'
+    output:
+        zscore_data = '02.Diff_analysis/{g}/{g}_zscore.xls',
+        zscore_pdf = '02.Diff_analysis/{g}/{g}_zscore.pdf'
+    run:
+        shell_file = '00.Bin/04.compare_analysis/10.diff_zscore_plot.sh'
+        os.makedirs(os.path.dirname(shell_file),exist_ok=True)
+        input_file = os.path.abspath(input.violin_plot_data)
+        zscore_data = os.path.abspath(output.zscore_data)
+        zscore_pdf = os.path.abspath(output.zscore_pdf)
+        shell('echo "{python} {Zscore_sort} -i {input_file} -o {zscore_data}" >> {shell_file}')
+        shell('echo "{Rscript} {Zscore_plot} --zdata {zscore_data} --output {zscore_pdf}" >> {shell_file}')
+        cmd1 = '{python} {Zscore_sort} -i {input.violin_plot_data} -o {output.zscore_data}'
+        cmd2 = '{Rscript} {Zscore_plot} --zdata {output.zscore_data} --output {output.zscore_pdf}'
+        try:
+            shell(cmd1)
+            shell(cmd2)
+        except:
+            cmd_ = 'touch {output.zscore_pdf};touch {output.zscore_data}'
+            shell(cmd_)
+
+
+# kegg 富集分析
+rule cor_kegg_analysis:
+    input:
+        cor_diff = '02.Diff_analysis/{g}/{g}_diff_value.xls',
+        change_log = '01.Data_prepare/change_id.log',
+        db_path = db_path
+    output:
+        diff_kegg_id = '03.KEGG_Enrichment/{g}/{g}_diff.id',
+        rich_result = '03.KEGG_Enrichment/{g}/{g}_KEGG_enrichment_result.xls',
+        cnetplot = '03.KEGG_Enrichment/{g}/{g}_cnetplot.pdf',
+        barplot = '03.KEGG_Enrichment/{g}/{g}_barplot.pdf',
+        dotplot = '03.KEGG_Enrichment/{g}/{g}_dotplot.pdf'
+    run:
+        shell_file = '00.Bin/05.KEGG/01.cor_kegg_analysis.sh'
+        os.makedirs(os.path.dirname(shell_file),exist_ok=True)
+        cor_diff = os.path.abspath(input.cor_diff)
+        change_log = os.path.abspath(input.change_log)
+        db_path = os.path.abspath(input.db_path)
+        diff_kegg_id = os.path.abspath(output.diff_kegg_id)
+        rich_result = os.path.abspath(output.rich_result)
+        cnetplot = os.path.abspath(output.cnetplot)
+        barplot = os.path.abspath(output.barplot)
+        dotplot = os.path.abspath(output.dotplot)
+        shell('echo "{python} {KEGG_id} -d {cor_diff} -l {change_log} -o {diff_kegg_id}" >> {shell_file}')
+        shell('echo "{Rscript} {KEGG_analysis} --keggannotation {db_path} --diffkeggid {diff_kegg_id} --number 15 --output_result {rich_result} --output_cnetplot {cnetplot} --output_barplot {barplot} --output_dotplot {dotplot} --width 8 --height 12" >> {shell_file}')
+        os.makedirs(os.path.dirname(output.diff_kegg_id),exist_ok=True)
+        get_diff_id_cmd = '{python} {KEGG_id} -d {input.cor_diff} -l {input.change_log} -o {output.diff_kegg_id}'
+        kegg_analysis = '{Rscript} {KEGG_analysis} --keggannotation {input.db_path} --diffkeggid {output.diff_kegg_id} --number 15 --output_result {output.rich_result} --output_cnetplot {output.cnetplot} --output_barplot {output.barplot} --output_dotplot {output.dotplot} --width 8 --height 12'
+        shell(get_diff_id_cmd)
+        shell(kegg_analysis)
+
+# 通路下载
+rule kegg_pathway:
+    input:
+        db_path = db_path,
+        enrichment_result = '03.KEGG_Enrichment/{g}/{g}_KEGG_enrichment_result.xls'
+    output:
+        out_dir = directory('04.KEGG_Pathway/{g}')
+    run:
+        shell_file = '00.Bin/05.KEGG/02.kegg_pathway.sh'
+        os.makedirs(os.path.dirname(shell_file),exist_ok=True)
+        enrichment_result = os.path.abspath(input.enrichment_result)
+        out_dir = os.path.abspath(output.out_dir)
+        shell('echo "{python} {KEGG_pathway} -k {enrichment_result} -d {input.db_path} -o {out_dir}" >> {shell_file}')
+        cmd = '{python} {KEGG_pathway} -k {input.enrichment_result} -d {input.db_path} -o {output.out_dir}'
+        shell(cmd)
+
+
+# 差异数据整合 稀疏矩阵 + upset 韦恩图
+rule venn_analy:
+    input:
+        diff_data = expand('02.Diff_analysis/{g}/{g}_diff_value.xls',g=compare_dirs),
+        change_log = '01.Data_prepare/change_id.log'
+    output:
+        venn_plot_data = '05.Venn/diff_meta_plot.xls',
+        venn_result = '05.Venn/diff_meta_result.xls',
+        venn_upset = '05.Venn/upset.pdf'
+    run:
+        shell_file = '00.Bin/06.venn/01.venn_analy.sh'
+        os.makedirs(os.path.dirname(shell_file),exist_ok=True)
+        diff_data = ' '.join([os.path.abspath(i) for i in input.diff_data])
+        change_log = os.path.abspath(input.change_log)
+
+        venn_plot_data = os.path.abspath(output.venn_plot_data)
+        venn_result = os.path.abspath(output.venn_result)
+        venn_upset = os.path.abspath(output.venn_upset)
+        shell('echo "{python} {Venn_data_sort} -is {diff_data} -l {change_log} -op {venn_plot_data} -ov {venn_result}" >> {shell_file}')
+        shell('echo "{Rscript} {Venn_plot}  --venn {venn_plot_data} --output {venn_upset}" >> {shell_file}')
+        sort_data_cmd = '{python} {Venn_data_sort} -is {input.diff_data} -l {input.change_log} -op {output.venn_plot_data} -ov {output.venn_result}'
+        plot_cmd = '{Rscript} {Venn_plot}  --venn {output.venn_plot_data} --output {output.venn_upset}'
+        shell(sort_data_cmd)
+        shell(plot_cmd)
+
+
+
+# 整理结果
+rule one_sort_result:
+    input:
+        in_total_pca2d = '01.Data_prepare/All.pca2d.pdf',
+        in_total_pca3d = '01.Data_prepare/All.pca3d.pdf',
+        in_total_plsda = '01.Data_prepare/All.plsda.pdf',
+        in_merge_venn = '05.Venn/upset.pdf',
+        in_merge_diff_meta = '05.Venn/diff_meta_result.xls',
+        in_kmeans_data = '01.Data_prepare/KMeans_Analysis_data_matrix.xls',
+        in_kmeans_plot = '01.Data_prepare/KMeans_Plot.pdf',
+        in_change_log = '01.Data_prepare/change_id.log'
+    output:
+        total_pca2d = '06.Result/01.Statistical_Analysis/Total/Total.pca2d.pdf',
+        total_pca3d = '06.Result/01.Statistical_Analysis/Total/Total.pca3d.pdf',
+        total_plsda = '06.Result/01.Statistical_Analysis/Total/Total.plsda.pdf',
+        merge_venn = '06.Result/10.Venn/upset.pdf',
+        merge_diff_meta = '06.Result/10.Venn/diff_meta_result.xls',
+        kmeans_data = '06.Result/11.KMeans/KMeans_Analysis_data_matrix.xls',
+        kmeans_plot = '06.Result/11.KMeans/KMeans_Plot.pdf',
+        map_log = '06.Result/Map.xls'
+    run:
+        shell_file = '00.Bin/07.Sort/01.one_sort_result.sh'
+        os.makedirs(os.path.dirname(shell_file),exist_ok=True)
+        in_total_pca2d = os.path.abspath(input.in_total_pca2d)
+        total_pca2d = os.path.abspath(output.total_pca2d)
+        in_total_pca3d = os.path.abspath(input.in_total_pca3d)
+        total_pca3d = os.path.abspath(output.total_pca3d)
+        in_total_plsda = os.path.abspath(input.in_total_plsda)
+        total_plsda = os.path.abspath(output.total_plsda)
+        in_merge_venn = os.path.abspath(input.in_merge_venn)
+        merge_venn = os.path.abspath(output.merge_venn)
+        in_merge_diff_meta = os.path.abspath(input.in_merge_diff_meta)
+        merge_diff_meta = os.path.abspath(output.merge_diff_meta)
+        
+        in_kmeans_data = os.path.abspath(input.in_kmeans_data)
+        kmeans_data = os.path.abspath(output.kmeans_data)
+        in_kmeans_plot = os.path.abspath(input.in_kmeans_plot)
+        kmeans_plot = os.path.abspath(output.kmeans_plot)
+
+        in_change = os.path.abspath(input.in_change_log)
+        map_log = os.path.abspath(output.map_log)
+        shell('echo "ln -s {in_change} {map_log}" >> {shell_file}')
+        shell('echo "ln -s {in_total_pca2d} {total_pca2d}" >> {shell_file}')
+        shell('echo "ln -s {in_total_pca3d} {total_pca3d}" >> {shell_file}')
+        shell('echo "ln -s {in_total_plsda} {total_plsda}" >> {shell_file}')
+        shell('echo "ln -s {in_merge_venn} {merge_venn}" >> {shell_file}')
+        shell('echo "ln -s {in_merge_diff_meta} {merge_diff_meta}" >> {shell_file}')
+        shell('echo "ln -s {in_kmeans_data} {kmeans_data}" >> {shell_file}')
+        shell('echo "ln -s {in_kmeans_plot} {kmeans_plot}" >> {shell_file}')
+
+        cmd0 = 'ln -s {in_change} {map_log}'
+        cmd1 = 'ln -s {in_total_pca2d} {total_pca2d}'
+        cmd2 = 'ln -s {in_total_pca3d} {total_pca3d}'
+        cmd3 = 'ln -s {in_total_plsda} {total_plsda}'
+        cmd21 = 'ln -s {in_merge_venn} {merge_venn}'
+        cmd22 = 'ln -s {in_merge_diff_meta} {merge_diff_meta}'
+        cmd23 = 'ln -s {in_kmeans_data} {kmeans_data}'
+        cmd24 = 'ln -s {in_kmeans_plot} {kmeans_plot}'
+
+        # print(cmd1)
+        shell(cmd0)
+        shell(cmd1)
+        shell(cmd2)
+        shell(cmd3)
+        shell(cmd21)
+        shell(cmd22)
+        shell(cmd23)
+        shell(cmd24)
+
+
+rule sort_result:
+    input:        
+        in_group_diff = '02.Diff_analysis/{g}/{g}_diff_value.xls',
+        in_group_heatmap = '02.Diff_analysis/{g}/{g}_heatmap.pdf',
+        in_group_cor_heatmap = '02.Diff_analysis/{g}/{g}_cor_heatmap.pdf',
+        in_group_volcano = '02.Diff_analysis/{g}/{g}_volcano.pdf',
+        in_group_vip_point = '02.Diff_analysis/{g}/{g}_vip_point.pdf',
+        in_group_log2fc_hbar = '02.Diff_analysis/{g}/{g}_log2fc_hbar.pdf',
+        in_group_violin = '02.Diff_analysis/{g}/{g}_violin.pdf',
+        in_group_zscore = '02.Diff_analysis/{g}/{g}_zscore.pdf',
+        in_group_violin_plot_data = '02.Diff_analysis/{g}/{g}_violin_plot.xls',
+        in_group_pca2d = '02.Diff_analysis/{g}/{g}.pca2d.pdf',
+        in_group_pca3d = '02.Diff_analysis/{g}/{g}.pca3d.pdf',
+        in_group_plsda = '02.Diff_analysis/{g}/{g}.plsda.pdf',
+        in_group_diff_id = '03.KEGG_Enrichment/{g}/{g}_diff.id',
+        in_group_enrichment_result = '03.KEGG_Enrichment/{g}/{g}_KEGG_enrichment_result.xls',
+        in_group_pathway_result = '04.KEGG_Pathway/{g}',
+        in_cnetplot = '03.KEGG_Enrichment/{g}/{g}_cnetplot.pdf',
+        in_barplot = '03.KEGG_Enrichment/{g}/{g}_barplot.pdf',
+        in_dotplot = '03.KEGG_Enrichment/{g}/{g}_dotplot.pdf'
+    output:
+        group_diff = '06.Result/01.Statistical_Analysis/{g}/{g}_diff_value.xls',
+        group_heatmap = '06.Result/02.Hierarchical_Clustering_Analysis/{g}/{g}_heatmap.pdf',
+        group_cor_heatmap = '06.Result/02.Hierarchical_Clustering_Analysis/{g}/{g}_cor_heatmap.pdf',
+        group_volcano = '06.Result/03.Volcano/{g}/{g}_volcano.pdf',
+        group_vip_point = '06.Result/04.VIP_point/{g}/{g}_vip_point.pdf',
+        group_log2fc_hbar = '06.Result/05.Bar/{g}/{g}_log2fc_hbar.pdf',
+        group_violin = '06.Result/06.Violin/{g}/{g}_violin.pdf',
+        group_zscore = '06.Result/07.Z-score/{g}/{g}_zscore.pdf',
+        group_pca2d = '06.Result/01.Statistical_Analysis/{g}/{g}.pca2d.pdf',
+        group_pca3d = '06.Result/01.Statistical_Analysis/{g}/{g}.pca3d.pdf',
+        group_plsda = '06.Result/01.Statistical_Analysis/{g}/{g}.plsda.pdf',
+        group_diff_id = '06.Result/08.KEGG_Enrichment/{g}/{g}_diff.id',
+        group_enrichment_result = '06.Result/08.KEGG_Enrichment/{g}/{g}_KEGG_enrichment_result.xls',
+        cnetplot = '06.Result/08.KEGG_Enrichment/{g}/{g}_cnetplot.pdf',
+        barplot = '06.Result/08.KEGG_Enrichment/{g}/{g}_barplot.pdf',
+        dotplot = '06.Result/08.KEGG_Enrichment/{g}/{g}_dotplot.pdf',
+        group_pathway_result = directory('06.Result/09.KEGG_Pathway/{g}'),
+    run:
+        shell_file = '00.Bin/07.Sort/02.sort_result.sh'
+        os.makedirs(os.path.dirname(shell_file),exist_ok=True)
+        in_group_diff = os.path.abspath(input.in_group_diff)
+        in_group_heatmap = os.path.abspath(input.in_group_heatmap)
+        in_group_cor_heatmap = os.path.abspath(input.in_group_cor_heatmap)
+        in_group_volcano = os.path.abspath(input.in_group_volcano)
+        in_group_vip_point = os.path.abspath(input.in_group_vip_point)
+        in_group_log2fc_hbar = os.path.abspath(input.in_group_log2fc_hbar)
+        in_group_violin = os.path.abspath(input.in_group_violin)
+        in_group_zscore = os.path.abspath(input.in_group_zscore)
+        in_group_pca2d = os.path.abspath(input.in_group_pca2d)
+        in_group_pca3d = os.path.abspath(input.in_group_pca3d)
+        in_group_plsda = os.path.abspath(input.in_group_plsda)
+        in_group_diff_id = os.path.abspath(input.in_group_diff_id)
+        in_group_enrichment_result = os.path.abspath(input.in_group_enrichment_result)
+        in_cnetplot = os.path.abspath(input.in_cnetplot)
+        in_barplot = os.path.abspath(input.in_barplot)
+        in_dotplot = os.path.abspath(input.in_dotplot)
+        in_group_pathway_result = os.path.abspath(input.in_group_pathway_result)
+
+        group_diff = os.path.abspath(output.group_diff)
+        group_heatmap = os.path.abspath(output.group_heatmap)
+        group_cor_heatmap = os.path.abspath(output.group_cor_heatmap)
+        group_volcano = os.path.abspath(output.group_volcano)
+        group_vip_point = os.path.abspath(output.group_vip_point)
+        group_log2fc_hbar = os.path.abspath(output.group_log2fc_hbar)
+        group_violin = os.path.abspath(output.group_violin)
+        group_zscore = os.path.abspath(output.group_zscore)
+        group_pca2d = os.path.abspath(output.group_pca2d)
+        group_pca3d = os.path.abspath(output.group_pca3d)
+        group_plsda = os.path.abspath(output.group_plsda)
+        group_diff_id = os.path.abspath(output.group_diff_id)
+        group_enrichment_result = os.path.abspath(output.group_enrichment_result)
+        cnetplot = os.path.abspath(output.cnetplot)
+        barplot = os.path.abspath(output.barplot)
+        dotplot = os.path.abspath(output.dotplot)
+        group_pathway_result = os.path.abspath(output.group_pathway_result)
+
+        shell('echo "ln -s {in_group_diff} {group_diff}" >> {shell_file}')
+        shell('echo "ln -s {in_group_heatmap} {group_heatmap}" >> {shell_file}')
+        shell('echo "ln -s {in_group_cor_heatmap} {group_cor_heatmap}" >> {shell_file}')
+        shell('echo "ln -s {in_group_volcano} {group_volcano}" >> {shell_file}')
+        shell('echo "ln -s {in_group_vip_point} {group_vip_point}" >> {shell_file}')
+        shell('echo "ln -s {in_group_log2fc_hbar} {group_log2fc_hbar}" >> {shell_file}')
+        shell('echo "ln -s {in_group_violin} {group_violin}" >> {shell_file}')
+        shell('echo "ln -s {in_group_zscore} {group_zscore}" >> {shell_file}')
+        shell('echo "ln -s {in_group_pca2d} {group_pca2d}" >> {shell_file}')
+        shell('echo "ln -s {in_group_pca3d} {group_pca3d}" >> {shell_file}')
+        shell('echo "ln -s {in_group_plsda} {group_plsda}" >> {shell_file}')
+        shell('echo "ln -s {in_group_diff_id} {group_diff_id}" >> {shell_file}')
+        shell('echo "ln -s {in_group_enrichment_result} {group_enrichment_result}" >> {shell_file}')
+        shell('echo "ln -s {in_cnetplot} {cnetplot}" >> {shell_file}')
+        shell('echo "ln -s {in_barplot} {barplot}" >> {shell_file}')
+        shell('echo "ln -s {in_dotplot} {dotplot}" >> {shell_file}')
+        shell('echo "ln -s {in_group_pathway_result} {group_pathway_result}" >> {shell_file}')
+
+
+
+        cmd4 = 'ln -s {in_group_diff} {group_diff}'
+        cmd5 = 'ln -s {in_group_heatmap} {group_heatmap}'
+        cmd6 = 'ln -s {in_group_cor_heatmap} {group_cor_heatmap}'
+        cmd7 = 'ln -s {in_group_volcano} {group_volcano}'
+        cmd8 = 'ln -s {in_group_vip_point} {group_vip_point}'
+        cmd9 = 'ln -s {in_group_log2fc_hbar} {group_log2fc_hbar}'
+        cmd10 = 'ln -s {in_group_violin} {group_violin}'
+        cmd11 = 'ln -s {in_group_zscore} {group_zscore}'
+        cmd12 = 'ln -s {in_group_pca2d} {group_pca2d}'
+        cmd13 = 'ln -s {in_group_pca3d} {group_pca3d}'
+        cmd14 = 'ln -s {in_group_plsda} {group_plsda}'
+        cmd15 = 'ln -s {in_group_diff_id} {group_diff_id}'
+        cmd16 = 'ln -s {in_group_enrichment_result} {group_enrichment_result}'
+        cmd17 = 'ln -s {in_cnetplot} {cnetplot}'
+        cmd18 = 'ln -s {in_barplot} {barplot}'
+        cmd19 = 'ln -s {in_dotplot} {dotplot}'
+        cmd20 = 'ln -s {in_group_pathway_result} {group_pathway_result}'
+
+        shell(cmd4)
+        shell(cmd5)
+        shell(cmd6)
+        shell(cmd7)
+        shell(cmd8)
+        shell(cmd9)
+        shell(cmd10)
+        shell(cmd11)
+        shell(cmd12)
+        shell(cmd13)
+        shell(cmd14)
+        shell(cmd15)
+        shell(cmd16)
+        shell(cmd17)
+        shell(cmd18)
+        shell(cmd19)
+        shell(cmd20)
+

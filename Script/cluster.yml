@@ -1,0 +1,124 @@
+localrules: all
+
+__default__:
+    queue: 'all.q,big'
+    workdir: './'
+    mem: '1G'
+    cores: 1
+
+data_prepare:
+    threads: 1
+    memory: '1G'
+    output: 'cluster_logs/{rule}/{rule}.o'
+    error: 'cluster_logs/{rule}/{rule}.e'
+
+total_pcas:
+    threads: 1
+    memory: '1G'
+    output: 'cluster_logs/{rule}/{rule}.o'
+    error: 'cluster_logs/{rule}/{rule}.e'
+
+kmeans_analysis:
+    threads: 1
+    memory: '1G'
+    output: 'cluster_logs/{rule}/{rule}.o'
+    error: 'cluster_logs/{rule}/{rule}.e'
+
+db_check:
+    threads: 1
+    memory: '1G'
+    output: 'cluster_logs/{rule}/{rule}.o'
+    error: 'cluster_logs/{rule}/{rule}.e'
+
+get_compare_data:
+    threads: 1
+    memory: '1G'
+    output: 'cluster_logs/{rule}/{wildcards.g}.o'
+    error: 'cluster_logs/{rule}/{wildcards.g}.e'
+
+compare_pcas:
+    threads: 1
+    memory: '1G'
+    output: 'cluster_logs/{rule}/{wildcards.g}.o'
+    error: 'cluster_logs/{rule}/{wildcards.g}.e'
+
+
+diff_count:
+    threads: 1
+    memory: '1G'
+    output: 'cluster_logs/{rule}/{wildcards.g}.o'
+    error: 'cluster_logs/{rule}/{wildcards.g}.e'
+
+diff_select:
+    threads: 1
+    memory: '1G'
+    output: 'cluster_logs/{rule}/{wildcards.g}.o'
+    error: 'cluster_logs/{rule}/{wildcards.g}.e'
+
+diff_heatmap_plot:
+    threads: 1
+    memory: '1G'
+    output: 'cluster_logs/{rule}/{wildcards.g}.o'
+    error: 'cluster_logs/{rule}/{wildcards.g}.e'
+
+diff_volcano_plot:
+    threads: 1
+    memory: '1G'
+    output: 'cluster_logs/{rule}/{wildcards.g}.o'
+    error: 'cluster_logs/{rule}/{wildcards.g}.e'
+
+diff_vip_point_plot:
+    threads: 1
+    memory: '1G'
+    output: 'cluster_logs/{rule}/{wildcards.g}.o'
+    error: 'cluster_logs/{rule}/{wildcards.g}.e'
+
+diff_log2fc_hbar_plot:
+    threads: 1
+    memory: '1G'
+    output: 'cluster_logs/{rule}/{wildcards.g}.o'
+    error: 'cluster_logs/{rule}/{wildcards.g}.e'
+
+diff_violin_plot:
+    threads: 1
+    memory: '1G'
+    output: 'cluster_logs/{rule}/{wildcards.g}.o'
+    error: 'cluster_logs/{rule}/{wildcards.g}.e'
+
+diff_zscore_plot:
+    threads: 1
+    memory: '1G'
+    output: 'cluster_logs/{rule}/{wildcards.g}.o'
+    error: 'cluster_logs/{rule}/{wildcards.g}.e'
+
+cor_kegg_analysis:
+    threads: 1
+    memory: '1G'
+    output: 'cluster_logs/{rule}/{wildcards.g}.o'
+    error: 'cluster_logs/{rule}/{wildcards.g}.e'
+
+kegg_pathway:
+    threads: 1
+    memory: '1G'
+    output: 'cluster_logs/{rule}/{wildcards.g}.o'
+    error: 'cluster_logs/{rule}/{wildcards.g}.e'
+
+venn_analy:
+    threads: 1
+    memory: '1G'
+    output: 'cluster_logs/{rule}/{rule}.o'
+    error: 'cluster_logs/{rule}/{rule}.e'
+
+one_sort_result:
+    threads: 1
+    memory: '1G'
+    output: 'cluster_logs/{rule}/{rule}.o'
+    error: 'cluster_logs/{rule}/{rule}.e'
+
+sort_result:
+    threads: 1
+    memory: '1G'
+    output: 'cluster_logs/{rule}/{rule}.o'
+    error: 'cluster_logs/{rule}/{rule}.e'
+
+
