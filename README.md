@@ -131,46 +131,55 @@ options:
 │   ├── diff_meta_result.xls                      # 各组差异分析差异代谢物汇总结果
 │   └── upset.pdf                                 # upset 韦恩图
 ├── 06.Result                                     # 分析结果整理
+│   ├── 00.Summary                                # 整体数据分布情况
+│   │   ├── QC.PCAX.pdf                           # QC样本PCA-X图
+│   │   ├── QC_correlation.pdf                    # QC样本相关性图
+│   │   ├── Total.pca2d.pdf                       # 所有样本 包含QC的PCA二维散点图
+│   │   ├── Total.pca3d.pdf                       # 所有样本 包含QC的PCA三维
+│   │   ├── Total_without_qc.pca2d.pdf            # 所有实验样本 无QC的PCA二维散点图
+│   │   ├── Total_without_qc.pca3d.pdf            # 所有实验样本 无QC的PCA三维散点图
+│   │   ├── hmdb_supclass_bar.pdf                 # hmdb注释统计柱状图
+│   │   ├── kegg_pathway_bar.pdf                  # kegg Pathway注释统计柱状图
 │   ├── 01.Statistical_Analysis                   # 统计分析结果
 │   │   ├── *                                     # 存放各组统计分析结果
-│   │   │   ├── *_diff_value.xls                  # 差异分析计算结果显著性，上调、下调注释
+│   │   │   ├── *_permutation_test_plot.pdf       # PLS-DA 置换检验结果
 │   │   │   ├── *.pca2d.pdf                       # 各层级 二维PCA散点图
 │   │   │   ├── *.pca3d.pdf                       # 各层级 三维PCA散点图
 │   │   │   └── *.plsda.pdf                       # 各层级 PLS-DA散点图
-│   ├── 02.Hierarchical_Clustering_Analysis       # 聚类分析结果
-│   │   ├── *                                     # 存放各组聚类分析结果
-│   │   │   ├── *_cor_heatmap.pdf                 # 各组代谢物相关性分析热图
-│   │   │   └── *_heatmap.pdf                     # 代谢物表达量热图
-│   ├── 03.Volcano                                # 火山图结果
-│   │   ├── *                                     # 存放各组火山图结果
-│   │   │   └── *_volcano.pdf                     # 各组火山图
-│   ├── 04.VIP_point                              # VIP点图
-│   │   ├── *                                     # 存放各组VIP点图
-│   │   │   └── *_vip_point.pdf                   # VIP点图
-│   ├── 05.Bar                                    # log2FC 水平柱状图结果
-│   │   ├── *                                     # 存放各组 log2FC 水平柱状图
-│   │   │   └── *_log2fc_hbar.pdf                 # log2FC 水平柱状图
-│   ├── 06.Violin                                 # 小提琴图结果
-│   │   ├── *                                     # 存放各组差异代谢物小提琴图
-│   │   │   └── *_violin.pdf                      # 小提琴图
-│   ├── 07.Z-score                                # Z-score 分布图
-│   │   ├── *                                     # 存放各组差异代谢物 Z-score分布图
-│   │   │   └── *_zscore.pdf                      # Z-score 分布图
-│   ├── 08.KEGG_Enrichment                        # KEGG富集分析结果
+│   │   │   └── *_Metabolite_inventory_differential.xls   # 原始代谢物信号强度 + 差异分析结果
+│   │   │   └── *_Normalized_inventory_differential.xls   # 归一化代谢物信号强度 + 差异分析结果
+│   ├── 02.Difference_analysis 
+│   │   │   ├── 01.Hierarchical_Clustering_Analysis       # 聚类分析结果
+│   │   │   │   ├── *                                     # 存放各组聚类分析结果
+│   │   │   │   │   ├── *_cor_heatmap.pdf                 # 各组代谢物相关性分析热图
+│   │   │   │   │   └── *_heatmap.pdf                     # 代谢物表达量热图
+│   │   │   ├── 02.Volcano                                # 火山图结果
+│   │   │   │   ├── *                                     # 存放各组火山图结果
+│   │   │   │   │   └── *_volcano.pdf                     # 各组火山图
+│   │   │   ├── 03.VIP_point                              # VIP点图
+│   │   │   │   ├── *                                     # 存放各组VIP点图
+│   │   │   │   │   └── *_vip_point.pdf                   # VIP点图
+│   │   │   ├── 04.Bar                                    # log2FC 水平柱状图结果
+│   │   │   │   ├── *                                     # 存放各组 log2FC 水平柱状图
+│   │   │   │   │   └── *_log2fc_hbar.pdf                 # log2FC 水平柱状图
+│   │   │   ├── 05.Violin                                 # 小提琴图结果
+│   │   │   │   ├── *                                     # 存放各组差异代谢物小提琴图
+│   │   │   │   │   └── *_violin.pdf                      # 小提琴图
+│   │   │   ├── 06.Z-score                                # Z-score 分布图
+│   │   │   │   ├── *                                     # 存放各组差异代谢物 Z-score分布图
+│   │   │   │   │   └── *_zscore.pdf                      # Z-score 分布图
+│   ├── 03.KEGG_Enrichment                        # KEGG富集分析结果
 │   │   ├── *                                     # 存放各组KEGG富集分析结果，若目录为空，则表示差异代谢物未得到富集
 │   │   │   ├── *_barplot.pdf                     # KEGG富集分析 柱状图
-│   │   │   ├── *_cnetplot.pdf                    # 代谢物与通路关系图
-│   │   │   ├── *_diff.id                         # 差异代谢物ID列表(转化后)
 │   │   │   ├── *_dotplot.pdf                     # KEGG分析 气泡图
 │   │   │   └── *_KEGG_enrichment_result.xls      # KEGG富集分析结果
-│   ├── 09.KEGG_Pathway                           # 存放各组KEGG通路图
-│   ├── 10.Venn                                   # 存放韦恩图结果
+│   ├── 04.KEGG_Pathway                           # 存放各组KEGG通路图
+│   ├── 05.Venn                                   # 存放韦恩图结果
 │   │   ├── diff_meta_result.xls                  # 各组差异代谢物汇总(稀疏矩阵格式)
 │   │   └── upset.pdf                             # 韦恩图
-│   ├── 11.KMeans                                 # KMeans 分析结果
+│   ├── 06.KMeans                                 # KMeans 分析结果
 │   │   ├── KMeans_Analysis_data_matrix.xls       # KMeans 聚类分析结果
 │   │   └── KMeans_Plot.pdf                       # Kmeans 聚类图
-│   └── Map.xls                                   # 代谢物名称、转化后ID、kegg ID对应表
 ├── cluster_logs                                  # 报错日志
 ```
 
